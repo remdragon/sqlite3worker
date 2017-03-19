@@ -1,4 +1,5 @@
 # Copyright (c) 2014 Palantir Technologies
+# -*- coding: utf-8 -*-
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -25,16 +26,16 @@ __email__ = "shawnl@palantir.com"
 __license__ = "MIT"
 
 import logging
-try:
-    import queue as Queue # module re-named in Python 3
-except ImportError:
-    import Queue
 import sqlite3
 import threading
-import time
 import uuid
 
-LOGGER = logging.getLogger('sqlite3worker')
+try:
+    import queue as Queue  # module re-named in Python 3
+except ImportError:
+    import Queue
+
+LOGGER = logging.getLogger("sqlite3worker")
 
 
 class Sqlite3Worker(threading.Thread):
@@ -52,6 +53,7 @@ class Sqlite3Worker(threading.Thread):
         sql_worker.execute("SELECT * from tester")
         sql_worker.close()
     """
+
     def __init__(self, file_name, max_queue_size=100):
         """Automatically starts the thread.
 
@@ -68,11 +70,13 @@ class Sqlite3Worker(threading.Thread):
         self.sql_queue = Queue.Queue(maxsize=max_queue_size)
         self.results = {}
         self.max_queue_size = max_queue_size
-        self.exit_set = False
-        # Token that is put into queue when close() is called.
-        self.exit_token = str(uuid.uuid4())
+        # Event that is triggered once the run_query has been executed.
+        self.select_event = threading.Event()
+        # Event to start the exit process.
+        self.exit_event = threading.Event()
+        # Event that closes out the threads.
+        self.thread_closed = threading.Event()
         self.start()
-        self.thread_running = True
 
     def run(self):
         """Thread loop.
@@ -88,10 +92,10 @@ class Sqlite3Worker(threading.Thread):
         LOGGER.debug("run: Thread started")
         execute_count = 0
         for token, query, values in iter(self.sql_queue.get, None):
-            LOGGER.debug("sql_queue: %s", self.sql_queue.qsize())
-            if token != self.exit_token:
+            if query:
+                LOGGER.debug("sql_queue: %s", self.sql_queue.qsize())
                 LOGGER.debug("run: %s", query)
-                self.run_query(token, query, values)
+                self._run_query(token, query, values)
                 execute_count += 1
                 # Let the executes build up a little before committing to disk
                 # to speed things up.
@@ -101,15 +105,19 @@ class Sqlite3Worker(threading.Thread):
                     LOGGER.debug("run: commit")
                     self.sqlite3_conn.commit()
                     execute_count = 0
-            # Only exit if the queue is empty. Otherwise keep getting
+                # Wake up the thread waiting on the execution of the select
+                # query.
+                if query.lower().strip().startswith("select"):
+                    self.select_event.set()
+            # Only exit if the queue is empty.  Otherwise keep getting
             # through the queue until it's empty.
-            if self.exit_set and self.sql_queue.empty():
+            if self.exit_event.is_set() and self.sql_queue.empty():
                 self.sqlite3_conn.commit()
                 self.sqlite3_conn.close()
-                self.thread_running = False
+                self.thread_closed.set()
                 return
 
-    def run_query(self, token, query, values):
+    def _run_query(self, token, query, values):
         """Run a query.
 
         Args:
@@ -136,19 +144,23 @@ class Sqlite3Worker(threading.Thread):
                     "Query returned error: %s: %s: %s", query, values, err)
 
     def close(self):
-        """Close down the thread and close the sqlite3 database file."""
-        self.exit_set = True
-        self.sql_queue.put((self.exit_token, "", ""), timeout=5)
-        # Sleep and check that the thread is done before returning.
-        while self.thread_running:
-            time.sleep(.01)  # Don't kill the CPU waiting.
+        """Close down the thread."""
+        if not self.is_alive():
+            LOGGER.debug("Already Closed")
+            return "Already Closed"
+        self.exit_event.set()
+        # Put a value in the queue to push through the block waiting for items
+        # in the queue.
+        self.sql_queue.put(("", "", ""), timeout=5)
+        # Check that the thread is done before returning.
+        self.thread_closed.wait()
 
     @property
     def queue_size(self):
         """Return the queue size."""
         return self.sql_queue.qsize()
 
-    def query_results(self, token):
+    def _query_results(self, token):
         """Get the query results for a specific token.
 
         Args:
@@ -157,19 +169,14 @@ class Sqlite3Worker(threading.Thread):
         Returns:
             Return the results of the query when it's executed by the thread.
         """
-        delay = .001
-        while True:
-            if token in self.results:
-                return_val = self.results[token]
-                del self.results[token]
-                return return_val
-            # Double back on the delay to a max of 8 seconds.  This prevents
-            # a long lived select statement from trashing the CPU with this
-            # infinite loop as it's waiting for the query results.
-            LOGGER.debug("Sleeping: %s %s", delay, token)
-            time.sleep(delay)
-            if delay < 8:
-                delay += delay
+        try:
+            # Wait until the select query has executed
+            self.select_event.wait()
+            return_val = self.results[token]
+            del self.results[token]
+            return return_val
+        finally:
+            self.select_event.clear()
 
     def execute(self, query, values=None):
         """Execute a query.
@@ -181,7 +188,7 @@ class Sqlite3Worker(threading.Thread):
         Returns:
             If it's a select query it will return the results of the query.
         """
-        if self.exit_set:
+        if self.exit_event.is_set():
             LOGGER.debug("Exit set, not running: %s", query)
             return "Exit Called"
         LOGGER.debug("execute: %s", query)
@@ -192,6 +199,6 @@ class Sqlite3Worker(threading.Thread):
         # into the output queue so we know what results are ours.
         if query.lower().strip().startswith("select"):
             self.sql_queue.put((token, query, values), timeout=5)
-            return self.query_results(token)
+            return self._query_results(token)
         else:
             self.sql_queue.put((token, query, values), timeout=5)

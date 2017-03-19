@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 # Copyright (c) 2014 Palantir Technologies
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -22,12 +23,13 @@
 """sqlite3worker test routines."""
 
 __author__ = "Shawn Lee"
-__email__ = "shawnl@palantir.com"
+__email__ = "dashawn@gmail.com"
 __license__ = "MIT"
 
 import os
 import tempfile
 import time
+
 import unittest
 
 import sqlite3worker
@@ -35,7 +37,8 @@ import sqlite3worker
 
 class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
     """Test out the sqlite3worker library."""
-    def setUp(self):  # pylint:disable=C0103
+
+    def setUp(self):  # pylint:disable=D0102
         self.tmp_file = tempfile.NamedTemporaryFile(
             suffix="pytest", prefix="sqlite").name
         self.sqlite3worker = sqlite3worker.Sqlite3Worker(self.tmp_file)
@@ -43,7 +46,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         self.sqlite3worker.execute(
             "CREATE TABLE tester (timestamp DATETIME, uuid TEXT)")
 
-    def tearDown(self):  # pylint:disable=C0103
+    def tearDown(self):  # pylint:disable=D0102
         self.sqlite3worker.close()
         os.unlink(self.tmp_file)
 
@@ -82,6 +85,27 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         self.assertEqual(
             self.sqlite3worker.execute("SELECT * from tester"),
             [("2010-01-01 13:00:00", "bow"), ("2011-02-02 14:14:14", "dog")])
+
+    def test_run_after_close(self):
+        """Test to make sure all events are cleared after object closed."""
+        self.sqlite3worker.close()
+        self.sqlite3worker.execute(
+            "INSERT into tester values (?, ?)", ("2010-01-01 13:00:00", "bow"))
+        self.assertEqual(
+            self.sqlite3worker.execute("SELECT * from tester"),
+            "Exit Called")
+
+    def test_double_close(self):
+        """Make sure double closeing messages properly."""
+        self.sqlite3worker.close()
+        self.assertEqual(self.sqlite3worker.close(), "Already Closed")
+
+    def test_db_closed_propertly(self):
+        """Make sure sqlite object is properly closed out."""
+        self.sqlite3worker.close()
+        with self.assertRaises(
+                self.sqlite3worker.sqlite3_conn.ProgrammingError):
+            self.sqlite3worker.sqlite3_conn.total_changes
 
 
 if __name__ == "__main__":
