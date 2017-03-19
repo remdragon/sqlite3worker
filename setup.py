@@ -29,7 +29,7 @@ from setuptools import setup
 
 setup(
     name="sqlite3worker",
-    version="1.0",
+    version="1.1",
     description="Thread safe sqlite3 interface",
     author="Shawn Lee",
     author_email="dashawn@gmail.com",
