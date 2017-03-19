@@ -69,7 +69,7 @@ class Sqlite3Worker(threading.Thread):
         self._sqlite3_cursor = self._sqlite3_conn.cursor()
         self._sql_queue = Queue.Queue(maxsize=max_queue_size)
         self._results = {}
-        self.max_queue_size = max_queue_size
+        self._max_queue_size = max_queue_size
         # Event that is triggered once the run_query has been executed.
         self._select_event = threading.Event()
         # Event to start the exit process.
@@ -101,7 +101,7 @@ class Sqlite3Worker(threading.Thread):
                 # to speed things up.
                 if (
                         self._sql_queue.empty() or
-                        execute_count == self.max_queue_size):
+                        execute_count == self._max_queue_size):
                     LOGGER.debug("run: commit")
                     self._sqlite3_conn.commit()
                     execute_count = 0
