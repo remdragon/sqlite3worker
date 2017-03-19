@@ -21,14 +21,14 @@ Alternatively one can use ``pip`` to install directly from the git repository
 without having to clone first:
 
 ```sh
-sudo pip install git+https://github.com/palantir/sqlite3worker#egg=sqlite3worker
+sudo pip install git+https://github.com/dashawn888/sqlite3worker#egg=sqlite3worker
 ```
 
 One may also use ``pip`` to install on a per-user basis without requiring
 super-user permissions:
 
 ```sh
-pip install --user git+https://github.com/palantir/sqlite3worker#egg=sqlite3worker
+pip install --user git+https://github.com/dashawn888/sqlite3worker#egg=sqlite3worker
 ```
 
 ## Example

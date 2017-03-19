@@ -22,7 +22,7 @@
 """Thread safe sqlite3 interface."""
 
 __author__ = "Shawn Lee"
-__email__ = "shawnl@palantir.com"
+__email__ = "dashawn@gmail.com"
 __license__ = "MIT"
 
 import logging
