@@ -33,6 +33,8 @@ setup(
     description="Thread safe sqlite3 interface",
     author="Shawn Lee",
     author_email="dashawn@gmail.com",
+    url="https://github.com/dashawn888/sqlite3worker",
     packages=["sqlite3worker"],
     package_dir={"sqlite3worker": "."},
+    keywords=["sqlite", "sqlite3", "thread", "multithread", "multithreading"],
     test_suite="sqlite3worker_test")
