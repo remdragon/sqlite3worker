@@ -23,5 +23,6 @@
 __author__ = "Shawn Lee"
 __email__ = "dashawn@gmail.com"
 __license__ = "MIT"
+__version__ = 1.1
 
 from sqlite3worker import Sqlite3Worker
