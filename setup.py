@@ -22,7 +22,7 @@
 """Setup."""
 
 __author__ = "Shawn Lee"
-__email__ = "shawnl@palantir.com"
+__email__ = "dashawn@gmail.com"
 __license__ = "MIT"
 
 from setuptools import setup
@@ -32,7 +32,7 @@ setup(
     version="1.0",
     description="Thread safe sqlite3 interface",
     author="Shawn Lee",
-    author_email="shawnl@palantir.com",
+    author_email="dashawn@gmail.com",
     packages=["sqlite3worker"],
     package_dir={"sqlite3worker": "."},
     test_suite="sqlite3worker_test")
