@@ -104,8 +104,8 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         """Make sure sqlite object is properly closed out."""
         self.sqlite3worker.close()
         with self.assertRaises(
-                self.sqlite3worker.sqlite3_conn.ProgrammingError):
-            self.sqlite3worker.sqlite3_conn.total_changes
+                self.sqlite3worker._sqlite3_conn.ProgrammingError):
+            self.sqlite3worker._sqlite3_conn.total_changes
 
 
 if __name__ == "__main__":
