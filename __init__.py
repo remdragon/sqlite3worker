@@ -21,7 +21,7 @@
 """Init."""
 
 __author__ = "Shawn Lee"
-__email__ = "shawnl@palantir.com"
+__email__ = "dashawn@gmail.com"
 __license__ = "MIT"
 
 from sqlite3worker import Sqlite3Worker
