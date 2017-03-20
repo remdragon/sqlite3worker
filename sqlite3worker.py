@@ -158,6 +158,8 @@ class Sqlite3Worker(threading.Thread):
         # Check that the thread is done before returning.
         self._thread_closed_event.wait()
         self._close_lock.release()
+        while self.is_alive():
+            time.sleep(.1)
 
     @property
     def queue_size(self):
