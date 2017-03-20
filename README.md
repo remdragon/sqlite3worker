@@ -10,6 +10,8 @@ with multiple threads outside of the compile time options.  This library was
 created to address this by bringing the responsibility of managing the threads
 to the python layer and is agnostic to the server setup of sqlite3.
 
+[![Build Status](https://travis-ci.org/dashawn888/sqlite3worker.svg?branch=master)](https://travis-ci.org/dashawn888/sqlite3worker)
+
 ## Install
 You can use pip:
 ```sh
