@@ -77,6 +77,7 @@ class Sqlite3Worker(threading.Thread):
         self._exit_event = threading.Event()
         # Event that closes out the threads.
         self._thread_closed_event = threading.Event()
+        self._close_lock = threading.Lock()
         self.start()
 
     def run(self):
@@ -149,12 +150,14 @@ class Sqlite3Worker(threading.Thread):
         if not self.is_alive():
             LOGGER.debug("Already Closed")
             return "Already Closed"
+        self._close_lock.acquire()
         self._exit_event.set()
         # Put a value in the queue to push through the block waiting for items
         # in the queue.
         self._sql_queue.put(("", "", ""), timeout=5)
         # Check that the thread is done before returning.
         self._thread_closed_event.wait()
+        self._close_lock.release()
 
     @property
     def queue_size(self):

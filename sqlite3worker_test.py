@@ -121,7 +121,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
                 self.start()
 
             def run(self):
-                for _ in range(100):
+                for _ in range(5):
                     token = str(uuid.uuid4())
                     self.sqlite_obj.execute(
                         "INSERT into tester values (?, ?)",
@@ -134,10 +134,10 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
                 self.completed = True
 
         threads = []
-        for _ in range(100):
+        for _ in range(5):
             threads.append(threaded(self.sqlite3worker))
 
-        for i in range(100):
+        for i in range(5):
             while not threads[i].completed:
                 time.sleep(.1)
             self.assertEqual(threads[i].failed, False)
