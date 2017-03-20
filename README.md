@@ -11,8 +11,12 @@ created to address this by bringing the responsibility of managing the threads
 to the python layer and is agnostic to the server setup of sqlite3.
 
 ## Install
-Installation is via the usual ``setup.py`` method:
+You can use pip:
+```sh
+sudo pip install sqlite3worker
+```
 
+You can use setup.py:
 ```sh
 sudo python setup.py install
 ```
