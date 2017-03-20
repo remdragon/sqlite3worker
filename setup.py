@@ -26,11 +26,17 @@ __email__ = "dashawn@gmail.com"
 __license__ = "MIT"
 
 from setuptools import setup
+import os
+
+short_description="Thread safe sqlite3 interface",
+long_description = short_description
+if os.path.exists('README.rst'):
+    long_description = open('README.rst').read()
 
 setup(
         name="sqlite3worker",
-        version="1.1",
-        description="Thread safe sqlite3 interface",
+        version="1.1.2",
+        description=short_description,
         author="Shawn Lee",
         author_email="dashawn@gmail.com",
         url="https://github.com/dashawn888/sqlite3worker",
