@@ -27,6 +27,7 @@ __license__ = "MIT"
 
 import logging
 import sqlite3
+import time
 import threading
 import uuid
 
@@ -172,6 +173,8 @@ class Sqlite3Worker(threading.Thread):
         try:
             # Wait until the select query has executed
             self._select_event.wait()
+            while token not in self._results:
+                time.sleep(.1)
             return_val = self._results[token]
             del self._results[token]
             return return_val

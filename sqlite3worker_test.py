@@ -28,7 +28,9 @@ __license__ = "MIT"
 
 import os
 import tempfile
+import threading
 import time
+import uuid
 
 import unittest
 
@@ -106,6 +108,40 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         with self.assertRaises(
                 self.sqlite3worker._sqlite3_conn.ProgrammingError):
             self.sqlite3worker._sqlite3_conn.total_changes
+
+    def test_many_threads(self):
+        """Make sure lots of threads work together."""
+        class threaded(threading.Thread):
+            def __init__(self, sqlite_obj):
+                threading.Thread.__init__(self, name=__name__)
+                self.sqlite_obj = sqlite_obj
+                self.daemon = True
+                self.failed = False
+                self.completed = False
+                self.start()
+
+            def run(self):
+                for _ in range(100):
+                    token = str(uuid.uuid4())
+                    self.sqlite_obj.execute(
+                        "INSERT into tester values (?, ?)",
+                        ("2010-01-01 13:00:00", token))
+                    resp = self.sqlite_obj.execute(
+                        "SELECT * from tester where uuid = ?", (token,))
+                    if resp != [("2010-01-01 13:00:00", token)]:
+                        self.failed = True
+                        break
+                self.completed = True
+
+        threads = []
+        for _ in range(100):
+            threads.append(threaded(self.sqlite3worker))
+
+        for i in range(100):
+            while not threads[i].completed:
+                time.sleep(.1)
+            self.assertEqual(threads[i].failed, False)
+            threads[i].join()
 
 
 if __name__ == "__main__":
