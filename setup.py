@@ -35,7 +35,7 @@ if os.path.exists('README.rst'):
 
 setup(
         name="sqlite3worker",
-        version="1.1.3",
+        version="1.1.4",
         description=short_description,
         author="Shawn Lee",
         author_email="dashawn@gmail.com",
