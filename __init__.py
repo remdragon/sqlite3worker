@@ -25,4 +25,4 @@ __email__ = "dashawn@gmail.com"
 __license__ = "MIT"
 __version__ = 1.1.4
 
-from sqlite3worker import Sqlite3Worker
+from sqlite3worker.sqlite3worker import Sqlite3Worker
