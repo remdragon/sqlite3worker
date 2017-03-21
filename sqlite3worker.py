@@ -105,11 +105,6 @@ class Sqlite3Worker(threading.Thread):
                     LOGGER.debug("run: commit")
                     self._sqlite3_conn.commit()
                     execute_count = 0
-                # Wake up the thread waiting on the execution of the select
-                # query.
-                if query.lower().strip().startswith("select"):
-                    self._select_events.setdefault(token, threading.Event())
-                    self._select_events[token].set()
             # Only exit if the queue is empty.  Otherwise keep getting
             # through the queue until it's empty.
             if self._exit_event.is_set() and self._sql_queue.empty():
@@ -136,6 +131,11 @@ class Sqlite3Worker(threading.Thread):
                     "Query returned error: %s: %s: %s" % (query, values, err))
                 LOGGER.error(
                     "Query returned error: %s: %s: %s", query, values, err)
+            finally:
+                # Wake up the thread waiting on the execution of the select
+                # query.
+                self._select_events.setdefault(token, threading.Event())
+                self._select_events[token].set()
         else:
             try:
                 self._sqlite3_cursor.execute(query, values)
