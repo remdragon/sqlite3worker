@@ -174,8 +174,7 @@ class Sqlite3Worker(threading.Thread):
             # Wait until the select query has executed
             self._select_events.setdefault(token, threading.Event())
             self._select_events[token].wait()
-            return_val = self._results[token]
-            return return_val
+            return self._results[token]
         finally:
             self._select_events[token].clear()
             del self._results[token]
