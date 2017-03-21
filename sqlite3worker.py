@@ -27,7 +27,6 @@ __license__ = "MIT"
 
 import logging
 import sqlite3
-import time
 import threading
 import uuid
 
@@ -72,11 +71,10 @@ class Sqlite3Worker(threading.Thread):
         self._results = {}
         self._max_queue_size = max_queue_size
         # Event that is triggered once the run_query has been executed.
-        self._select_event = threading.Event()
+        self._select_events = {}
         # Event to start the exit process.
         self._exit_event = threading.Event()
         # Event that closes out the threads.
-        self._thread_closed_event = threading.Event()
         self._close_lock = threading.Lock()
         self.start()
 
@@ -110,13 +108,13 @@ class Sqlite3Worker(threading.Thread):
                 # Wake up the thread waiting on the execution of the select
                 # query.
                 if query.lower().strip().startswith("select"):
-                    self._select_event.set()
+                    self._select_events.setdefault(token, threading.Event())
+                    self._select_events[token].set()
             # Only exit if the queue is empty.  Otherwise keep getting
             # through the queue until it's empty.
             if self._exit_event.is_set() and self._sql_queue.empty():
                 self._sqlite3_conn.commit()
                 self._sqlite3_conn.close()
-                self._thread_closed_event.set()
                 return
 
     def _run_query(self, token, query, values):
@@ -147,19 +145,16 @@ class Sqlite3Worker(threading.Thread):
 
     def close(self):
         """Close down the thread."""
-        if not self.is_alive():
-            LOGGER.debug("Already Closed")
-            return "Already Closed"
-        self._close_lock.acquire()
-        self._exit_event.set()
-        # Put a value in the queue to push through the block waiting for items
-        # in the queue.
-        self._sql_queue.put(("", "", ""), timeout=5)
-        # Check that the thread is done before returning.
-        self._thread_closed_event.wait()
-        self._close_lock.release()
-        while self.is_alive():
-            time.sleep(.1)
+        with self._close_lock:
+            if not self.is_alive():
+                LOGGER.debug("Already Closed")
+                return "Already Closed"
+            self._exit_event.set()
+            # Put a value in the queue to push through the block waiting for
+            # items in the queue.
+            self._sql_queue.put(("", "", ""), timeout=5)
+            # Check that the thread is done before returning.
+            self.join()
 
     @property
     def queue_size(self):
@@ -177,14 +172,14 @@ class Sqlite3Worker(threading.Thread):
         """
         try:
             # Wait until the select query has executed
-            self._select_event.wait()
-            while token not in self._results:
-                time.sleep(.1)
+            self._select_events.setdefault(token, threading.Event())
+            self._select_events[token].wait()
             return_val = self._results[token]
-            del self._results[token]
             return return_val
         finally:
-            self._select_event.clear()
+            self._select_events[token].clear()
+            del self._results[token]
+            del self._select_events[token]
 
     def execute(self, query, values=None):
         """Execute a query.
