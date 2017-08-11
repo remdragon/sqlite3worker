@@ -41,8 +41,8 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
     """Test out the sqlite3worker library."""
 
     def setUp(self):  # pylint:disable=D0102
-        self.tmp_file = tempfile.NamedTemporaryFile(
-            suffix="pytest", prefix="sqlite").name
+        self.tmp_file = tempfile.mktemp(
+            suffix="pytest", prefix="sqlite")
         self.sqlite3worker = sqlite3worker.Sqlite3Worker(self.tmp_file)
         # Create sql db.
         self.sqlite3worker.execute(
