@@ -95,8 +95,8 @@ class Sqlite3WorkerExecute ( Sqlite3WorkerRequest ):
 			result = ( cur.fetchall(), cur.description, cur.lastrowid )
 			success = True
 		except Exception as err:
-			LOGGER.error (
-				"Unhandled Exception in Sqlite3WorkerExecute.execute: {!r}".format ( err ) )
+			LOGGER.debug (
+				"Sqlite3WorkerExecute.execute sending exception back to calling thread: {!r}".format ( err ) )
 			result = err
 			success = False
 		self.results.put ( ( success, result ) )
@@ -120,8 +120,8 @@ class Sqlite3WorkerExecuteScript ( Sqlite3WorkerRequest ):
 			result = ( cur.fetchall(), cur.description, cur.lastrowid )
 			success = True
 		except Exception as err:
-			LOGGER.error (
-				"Unhandled Exception in Sqlite3WorkerExecuteScript.execute: {!r}".format ( err ) )
+			LOGGER.debug (
+				"Sqlite3WorkerExecuteScript.execute sending exception back to calling thread: {!r}".format ( err ) )
 			result = err
 			success = False
 		self.results.put ( ( success, result ) )
@@ -184,8 +184,8 @@ class Sqlite3Worker ( Frozen_object ):
 		self.file_name = normalize_file_name ( file_name )
 		if self.file_name != ':memory:':
 			global workers
-			assert file_name not in workers, 'attempted to create two different Sqlite3Worker objects that reference the same database'
-			workers[file_name] = self
+			assert self.file_name not in workers, 'attempted to create two different Sqlite3Worker objects that reference the same database'
+			workers[self.file_name] = self
 		
 		self._sqlite3_conn = sqlite3.connect (
 			file_name, check_same_thread=False,
@@ -218,7 +218,10 @@ class Sqlite3Worker ( Frozen_object ):
 				self._sqlite3_conn.close()
 				if self.file_name != ':memory:':
 					global workers
-					del workers[self.file_name]
+					try:
+						del workers[self.file_name]
+					except KeyError:
+						print ( 'file_name {!r} not found in workers {!r}'.format ( self.file_name, workers ) )
 				return
 	
 	def close ( self ):
