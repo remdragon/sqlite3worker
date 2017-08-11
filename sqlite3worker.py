@@ -61,7 +61,7 @@ class Sqlite3WorkerSetRowFactory ( Sqlite3WorkerRequest ):
 		self.row_factory = row_factory
 	
 	def execute ( self ):
-		self.worker.sqlite3_cursor.row_factory = self.row_factory
+		self.worker._sqlite3_cursor.row_factory = self.row_factory
 
 class Sqlite3WorkerSetTextFactory ( Sqlite3WorkerRequest ):
 	worker = None
@@ -89,7 +89,7 @@ class Sqlite3WorkerExecute ( Sqlite3WorkerRequest ):
 	def execute ( self ):
 		LOGGER.debug ( "run execute: %s", self.query )
 		worker = self.worker
-		cur = worker.sqlite3_cursor
+		cur = worker._sqlite3_cursor
 		try:
 			cur.execute ( self.query, self.values )
 			result = ( cur.fetchall(), cur.description, cur.lastrowid )
@@ -114,7 +114,7 @@ class Sqlite3WorkerExecuteScript ( Sqlite3WorkerRequest ):
 	def execute ( self ):
 		LOGGER.debug ( "run executescript: %s", self.query )
 		worker = self.worker
-		cur = worker.sqlite3_cursor
+		cur = worker._sqlite3_cursor
 		try:
 			cur.executescript ( self.query )
 			result = ( cur.fetchall(), cur.description, cur.lastrowid )
@@ -164,12 +164,12 @@ class Sqlite3Worker ( Frozen_object ):
 		sql_worker.execute("SELECT * from tester")
 		sql_worker.close()
 	"""
-	file_name = None
+	_file_name = None
 	_sqlite3_conn = None
-	sqlite3_cursor = None
-	sql_queue = None
-	max_queue_size = None
-	exit_set = False
+	_sqlite3_cursor = None
+	_sql_queue = None
+	_max_queue_size = None
+	_exit_set = False
 	_thread = None
 	
 	def __init__ ( self, file_name, max_queue_size=100 ):
@@ -181,25 +181,25 @@ class Sqlite3Worker ( Frozen_object ):
 		self._thread = threading.Thread ( target=self.run )
 		self._thread.daemon = True
 		
-		self.file_name = normalize_file_name ( file_name )
-		if self.file_name != ':memory:':
+		self._file_name = normalize_file_name ( file_name )
+		if self._file_name != ':memory:':
 			global workers
-			assert self.file_name not in workers, 'attempted to create two different Sqlite3Worker objects that reference the same database'
-			workers[self.file_name] = self
+			assert self._file_name not in workers, 'attempted to create two different Sqlite3Worker objects that reference the same database'
+			workers[self._file_name] = self
 		
 		self._sqlite3_conn = sqlite3.connect (
 			file_name, check_same_thread=False,
 			#detect_types=sqlite3.PARSE_DECLTYPES
 		)
-		self.sqlite3_cursor = self._sqlite3_conn.cursor()
-		self.sql_queue = Queue.Queue ( maxsize=max_queue_size )
-		self.max_queue_size = max_queue_size
+		self._sqlite3_cursor = self._sqlite3_conn.cursor()
+		self._sql_queue = Queue.Queue ( maxsize=max_queue_size )
+		self._max_queue_size = max_queue_size
 		self._thread.name = self._thread.name.replace ( 'Thread-', 'sqlite3worker-' )
 		self._thread.start()
 	
 	def run ( self ):
 		"""Thread loop.
-		This is an infinite loop.  The iter method calls self.sql_queue.get()
+		This is an infinite loop.  The iter method calls self._sql_queue.get()
 		which blocks if there are not values in the queue.  As soon as values
 		are placed into the queue the process will continue.
 		If many executes happen at once it will churn through them all before
@@ -209,41 +209,41 @@ class Sqlite3Worker ( Frozen_object ):
 		LOGGER.debug("run: Thread started")
 		while True:
 			try:
-				self.sql_queue.get().execute()
+				self._sql_queue.get().execute()
 			except Sqlite3WorkerExit as e:
-				if not self.sql_queue.empty(): # pragma: no cover ( TODO FIXME: come back to this )
-					self.sql_queue.put ( e ) # push the exit event to the end of the queue
+				if not self._sql_queue.empty(): # pragma: no cover ( TODO FIXME: come back to this )
+					self._sql_queue.put ( e ) # push the exit event to the end of the queue
 					continue
 				self._sqlite3_conn.commit()
 				self._sqlite3_conn.close()
-				if self.file_name != ':memory:':
+				if self._file_name != ':memory:':
 					global workers
 					try:
-						del workers[self.file_name]
+						del workers[self._file_name]
 					except KeyError:
-						print ( 'file_name {!r} not found in workers {!r}'.format ( self.file_name, workers ) )
+						LOGGER.error ( 'file_name {!r} not found in workers {!r}'.format ( self._file_name, workers ) )
 				return
 	
 	def close ( self ):
 		"""Close down the thread and close the sqlite3 database file."""
-		if self.exit_set: # pragma: no cover
+		if self._exit_set: # pragma: no cover
 			LOGGER.debug ( "sqlite worker thread already shutting down" )
 			raise OperationalError ( 'sqlite worker thread already shutting down' )
-		self.exit_set = True
-		self.sql_queue.put ( Sqlite3WorkerExit(), timeout=5 )
+		self._exit_set = True
+		self._sql_queue.put ( Sqlite3WorkerExit(), timeout=5 )
 		# Sleep and check that the thread is done before returning.
 		self._thread.join()
 	
 	@property
 	def queue_size ( self ): # pragma: no cover
 		"""Return the queue size."""
-		return self.sql_queue.qsize()
+		return self._sql_queue.qsize()
 	
 	def set_row_factory ( self, row_factory ):
-		self.sql_queue.put ( Sqlite3WorkerSetRowFactory ( self, row_factory ), timeout=5 )
+		self._sql_queue.put ( Sqlite3WorkerSetRowFactory ( self, row_factory ), timeout=5 )
 	
 	def set_text_factory ( self, text_factory ):
-		self.sql_queue.put ( Sqlite3WorkerSetTextFactory ( self, text_factory ), timeout=5 )
+		self._sql_queue.put ( Sqlite3WorkerSetTextFactory ( self, text_factory ), timeout=5 )
 	
 	def execute_ex ( self, query, values=None ):
 		"""Execute a query.
@@ -256,12 +256,12 @@ class Sqlite3Worker ( Frozen_object ):
 				description is the results of cursor.description after executing the query
 				lastrowid is the result of calling cursor.lastrowid after executing the query
 		"""
-		if self.exit_set: # pragma: no cover
+		if self._exit_set: # pragma: no cover
 			LOGGER.debug ( "Exit set, not running: %s", query )
 			raise OperationalError ( 'sqlite worker thread already shutting down' )
 		LOGGER.debug ( "request execute: %s", query )
 		r = Sqlite3WorkerExecute ( self, query, values or [] )
-		self.sql_queue.put ( r, timeout=5 )
+		self._sql_queue.put ( r, timeout=5 )
 		success, result = r.results.get()
 		if not success:
 			raise result
@@ -272,12 +272,12 @@ class Sqlite3Worker ( Frozen_object ):
 		return self.execute_ex ( query, values )[0]
 	
 	def executescript_ex ( self, query ):
-		if self.exit_set: # pragma: no cover
+		if self._exit_set: # pragma: no cover
 			LOGGER.debug ( "Exit set, not running: %s", query )
 			raise OperationalError ( 'sqlite worker thread already shutting down' )
 		LOGGER.debug ( "request executescript: %s", query )
 		r = Sqlite3WorkerExecuteScript ( self, query )
-		self.sql_queue.put ( r, timeout=5 )
+		self._sql_queue.put ( r, timeout=5 )
 		success, result = r.results.get()
 		if not success:
 			raise result
@@ -288,11 +288,11 @@ class Sqlite3Worker ( Frozen_object ):
 		return self.executescript_ex ( sql )[0]
 	
 	def commit ( self ):
-		if self.exit_set: # pragma: no cover
+		if self._exit_set: # pragma: no cover
 			LOGGER.debug ( "Exit set, not running: %s", query )
 			raise OperationalError ( 'sqlite worker thread already shutting down' )
 		LOGGER.debug ( "request commit" )
-		self.sql_queue.put ( Sqlite3WorkerCommit ( self ), timeout=5 )
+		self._sql_queue.put ( Sqlite3WorkerCommit ( self ), timeout=5 )
 
 class Sqlite3worker_dbapi_cursor ( Frozen_object ):
 	con = None
