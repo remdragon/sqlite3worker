@@ -72,7 +72,7 @@ class Sqlite3WorkerSetTextFactory ( Sqlite3WorkerRequest ):
 		self.text_factory = text_factory
 	
 	def execute ( self ):
-		self.worker.sqlite3_conn.text_factory = self.text_factory
+		self.worker._sqlite3_conn.text_factory = self.text_factory
 
 class Sqlite3WorkerExecute ( Sqlite3WorkerRequest ):
 	worker = None
@@ -135,7 +135,7 @@ class Sqlite3WorkerCommit ( Sqlite3WorkerRequest ):
 	def execute ( self ):
 		LOGGER.debug("run commit")
 		worker = self.worker
-		worker.sqlite3_conn.commit()
+		worker._sqlite3_conn.commit()
 
 class Sqlite3WorkerExit ( Exception, Sqlite3WorkerRequest ):
 	def execute ( self ):
@@ -165,7 +165,7 @@ class Sqlite3Worker ( Frozen_object ):
 		sql_worker.close()
 	"""
 	file_name = None
-	sqlite3_conn = None
+	_sqlite3_conn = None
 	sqlite3_cursor = None
 	sql_queue = None
 	max_queue_size = None
@@ -187,11 +187,11 @@ class Sqlite3Worker ( Frozen_object ):
 			assert file_name not in workers, 'attempted to create two different Sqlite3Worker objects that reference the same database'
 			workers[file_name] = self
 		
-		self.sqlite3_conn = sqlite3.connect (
+		self._sqlite3_conn = sqlite3.connect (
 			file_name, check_same_thread=False,
 			#detect_types=sqlite3.PARSE_DECLTYPES
 		)
-		self.sqlite3_cursor = self.sqlite3_conn.cursor()
+		self.sqlite3_cursor = self._sqlite3_conn.cursor()
 		self.sql_queue = Queue.Queue ( maxsize=max_queue_size )
 		self.max_queue_size = max_queue_size
 		self._thread.name = self._thread.name.replace ( 'Thread-', 'sqlite3worker-' )
@@ -214,8 +214,8 @@ class Sqlite3Worker ( Frozen_object ):
 				if not self.sql_queue.empty(): # pragma: no cover ( TODO FIXME: come back to this )
 					self.sql_queue.put ( e ) # push the exit event to the end of the queue
 					continue
-				self.sqlite3_conn.commit()
-				self.sqlite3_conn.close()
+				self._sqlite3_conn.commit()
+				self._sqlite3_conn.close()
 				if self.file_name != ':memory:':
 					global workers
 					del workers[self.file_name]
@@ -224,7 +224,7 @@ class Sqlite3Worker ( Frozen_object ):
 	def close ( self ):
 		"""Close down the thread and close the sqlite3 database file."""
 		if self.exit_set: # pragma: no cover
-			LOGGER.debug ( "Exit set, not running: %s", query )
+			LOGGER.debug ( "sqlite worker thread already shutting down" )
 			raise OperationalError ( 'sqlite worker thread already shutting down' )
 		self.exit_set = True
 		self.sql_queue.put ( Sqlite3WorkerExit(), timeout=5 )
