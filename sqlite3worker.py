@@ -25,15 +25,15 @@ __email__ = "shawnl@palantir.com"
 __license__ = "MIT"
 
 import logging
+import platform
+import os
+import sqlite3
+import threading
+import time
 try:
 	import queue as Queue # module re-named in Python 3
 except ImportError: # pragma: no cover
 	import Queue
-import pathlib # pip install pathlib
-import platform
-import sqlite3
-import threading
-import time
 
 LOGGER = logging.getLogger('sqlite3worker')
 
@@ -145,7 +145,7 @@ def normalize_file_name ( file_name ):
 	if file_name.lower() == ':memory:':
 		return ':memory:'
 	# lookup absolute path of file_name
-	file_name = str ( pathlib.Path ( file_name ).absolute() )
+	file_name = os.path.abspath ( file_name )
 	if platform.system() == 'Windows':
 		file_name = file_name.lower() # Windows filenames are not case-sensitive
 	return file_name
