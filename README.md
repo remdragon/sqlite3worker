@@ -10,9 +10,15 @@ with multiple threads outside of the compile time options.  This library was
 created to address this by bringing the responsibility of managing the threads
 to the python layer and is agnostic to the server setup of sqlite3.
 
-## Install
-Installation is via the usual ``setup.py`` method:
+[![Build Status](https://travis-ci.org/dashawn888/sqlite3worker.svg?branch=master)](https://travis-ci.org/dashawn888/sqlite3worker)
 
+## Install
+You can use pip:
+```sh
+sudo pip install sqlite3worker
+```
+
+You can use setup.py:
 ```sh
 sudo python setup.py install
 ```
@@ -21,14 +27,14 @@ Alternatively one can use ``pip`` to install directly from the git repository
 without having to clone first:
 
 ```sh
-sudo pip install git+https://github.com/palantir/sqlite3worker#egg=sqlite3worker
+sudo pip install git+https://github.com/dashawn888/sqlite3worker#egg=sqlite3worker
 ```
 
 One may also use ``pip`` to install on a per-user basis without requiring
 super-user permissions:
 
 ```sh
-pip install --user git+https://github.com/palantir/sqlite3worker#egg=sqlite3worker
+pip install --user git+https://github.com/dashawn888/sqlite3worker#egg=sqlite3worker
 ```
 
 ## Example

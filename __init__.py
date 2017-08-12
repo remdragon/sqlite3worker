@@ -21,7 +21,13 @@
 """Init."""
 
 __author__ = "Shawn Lee"
-__email__ = "shawnl@palantir.com"
+__email__ = "dashawn@gmail.com"
 __license__ = "MIT"
+__version__ = "1.1.7"
 
-from sqlite3worker import Sqlite3Worker
+try:
+    # Python 2
+    from sqlite3worker import Sqlite3Worker
+except ImportError:
+    # Python 3
+    from sqlite3worker.sqlite3worker import Sqlite3Worker
