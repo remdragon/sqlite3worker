@@ -41,8 +41,8 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
     """Test out the sqlite3worker library."""
 
     def setUp(self):  # pylint:disable=D0102
-        self.tmp_file = tempfile.mktemp(
-            suffix="pytest", prefix="sqlite")
+        self.tmp_file = tempfile.NamedTemporaryFile(
+            suffix="pytest", prefix="sqlite").name
         self.sqlite3worker = sqlite3worker.Sqlite3Worker(self.tmp_file)
         # Create sql db.
         self.sqlite3worker.execute(
@@ -51,7 +51,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
     def tearDown(self):  # pylint:disable=D0102
         try:
             self.sqlite3worker.close()
-        except sqlite3worker.OperationalError:
+        except sqlite3worker.ProgrammingError:
             pass # the test may have already closed the database
         os.unlink(self.tmp_file)
 
@@ -92,22 +92,21 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
     def test_run_after_close(self):
         """Test to make sure all events are cleared after object closed."""
         self.sqlite3worker.close()
-        with self.assertRaises ( sqlite3worker.OperationalError ):
+        with self.assertRaises ( sqlite3worker.ProgrammingError ):
             self.sqlite3worker.execute(
                 "INSERT into tester values (?, ?)", ("2010-01-01 13:00:00", "bow"))
 
     def test_double_close(self):
         """Make sure double closeing messages properly."""
         self.sqlite3worker.close()
-        with self.assertRaises ( sqlite3worker.OperationalError ):
+        with self.assertRaises ( sqlite3worker.ProgrammingError ):
             self.sqlite3worker.close()
 
     def test_db_closed_properly(self):
         """Make sure sqlite object is properly closed out."""
         self.sqlite3worker.close()
-        with self.assertRaises(
-                self.sqlite3worker._sqlite3_conn.ProgrammingError):
-            self.sqlite3worker._sqlite3_conn.total_changes
+        with self.assertRaises ( sqlite3worker.ProgrammingError):
+            self.sqlite3worker.total_changes
 
     def test_many_threads(self):
         """Make sure lots of threads work together."""
