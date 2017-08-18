@@ -246,10 +246,10 @@ class Sqlite3Worker ( Frozen_object ):
 				self._thread._sql_queue.put ( Sqlite3WorkerExit(), timeout=5 )
 				# wait for the thread to finish what it's doing and shut down
 				self._thread.join()
-			try:
-				del self._threads[self._file_name]
-			except KeyError:
-				assert self._file_name == ':memory:'
+				try:
+					del self._threads[self._file_name]
+				except KeyError:
+					assert self._file_name == ':memory:'
 	
 	@property
 	def queue_size ( self ): # pragma: no cover

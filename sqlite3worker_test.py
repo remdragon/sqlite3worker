@@ -26,6 +26,7 @@ __author__ = "Shawn Lee"
 __email__ = "dashawn@gmail.com"
 __license__ = "MIT"
 
+import logging
 import os
 import tempfile
 import threading
@@ -41,8 +42,8 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
     """Test out the sqlite3worker library."""
 
     def setUp(self):  # pylint:disable=D0102
-        self.tmp_file = tempfile.NamedTemporaryFile(
-            suffix="pytest", prefix="sqlite").name
+        self.tmp_file = tempfile.mktemp(
+            suffix="pytest", prefix="sqlite")
         self.sqlite3worker = sqlite3worker.Sqlite3Worker(self.tmp_file)
         # Create sql db.
         self.sqlite3worker.execute(
@@ -97,7 +98,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
                 "INSERT into tester values (?, ?)", ("2010-01-01 13:00:00", "bow"))
 
     def test_double_close(self):
-        """Make sure double closeing messages properly."""
+        """Make sure double closing messages properly."""
         self.sqlite3worker.close()
         with self.assertRaises ( sqlite3worker.ProgrammingError ):
             self.sqlite3worker.close()
@@ -105,7 +106,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
     def test_db_closed_properly(self):
         """Make sure sqlite object is properly closed out."""
         self.sqlite3worker.close()
-        with self.assertRaises ( sqlite3worker.ProgrammingError):
+        with self.assertRaises ( sqlite3worker.ProgrammingError ):
             self.sqlite3worker.total_changes
 
     def test_many_threads(self):
@@ -142,6 +143,59 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
             self.assertEqual(threads[i].failed, False)
             threads[i].join()
 
+    def test_many_dbapi_threads ( self ):
+        """Make sure lots of threads work together with dbapi interface."""
+        class threaded ( threading.Thread ):
+            def __init__ ( self, id, tmp_file ):
+                threading.Thread.__init__ ( self, name='test {}'.format ( id ) )
+                self.tmp_file = tmp_file
+                self.daemon = True
+                self.failed = False
+                self.completed = False
+                self.start()
+
+            def run ( self ):
+                logging.debug ( 'connecting' )
+                con = sqlite3worker.connect ( self.tmp_file )
+                for i in range ( 5 ):
+                    logging.debug ( 'creating cursor #{}'.format ( i ) )
+                    c = con.cursor()
+                    token = str ( uuid.uuid4() )
+                    logging.debug ( 'cursor #{} inserting token {!r}'.format ( i, token ) )
+                    c.execute (
+                        "INSERT into tester values (?, ?)",
+                        ( "2010-01-01 13:00:00", token )
+                    )
+                    logging.debug ( 'cursor #{} querying token {!r}'.format ( i, token ) )
+                    c.execute (
+                        "SELECT * from tester where uuid = ?", (token,)
+                    )
+                    resp = c.fetchone()
+                    logging.debug ( 'cursor #{} closing'.format ( i ) )
+                    c.close()
+                    if resp != ( "2010-01-01 13:00:00", token ):
+                        logging.debug ( 'cursor #{} invalid resp {!r}'.format ( i, resp ) )
+                        logging.debug ( repr ( resp ) )
+                        self.failed = True
+                        break
+                    else:
+                        logging.debug ( 'cursor #{} success'.format ( i ) )
+                logging.debug ( 'closing connection' )
+                con.close()
+                self.completed = True
+        
+        threads = []
+        for id in range ( 5 ):
+            threads.append ( threaded ( id, self.tmp_file ) )
+        
+        for i in range ( 5 ):
+            while not threads[i].completed:
+                time.sleep ( 0.1 )
+            self.assertEqual ( threads[i].failed, False )
+            threads[i].join()
 
 if __name__ == "__main__":
+    if False:
+        import sys
+        logging.basicConfig ( stream=sys.stdout, level=logging.DEBUG, format='%(asctime)s [%(threadName)s %(levelname)s] %(message)s' )
     unittest.main()
