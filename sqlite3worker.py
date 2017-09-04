@@ -39,7 +39,15 @@ LOGGER = logging.getLogger('sqlite3worker')
 
 OperationalError = sqlite3.OperationalError
 ProgrammingError = sqlite3.ProgrammingError
-Row = sqlite3.Row
+
+def dict_factory ( cursor, row ):
+	d = {}
+	for idx, col in enumerate ( cursor.description ):
+		d[col[0]] = row[idx]
+	return d
+
+# native sqlite3.Row doesn't like our proxy cursor class so we're going to substitute dict_factory instead which is almost the same thing
+Row = dict_factory # sqlite3.Row
 
 class Frozen_object ( object ):
 	def __setattr__ ( self, key, value ):
@@ -87,8 +95,7 @@ class Sqlite3WorkerExecute ( Sqlite3WorkerRequest ):
 	
 	def execute ( self ):
 		LOGGER.debug ( "run execute: %s", self.query )
-		thread = self.thread
-		cur = thread._sqlite3_cursor
+		cur = self.thread._sqlite3_cursor
 		try:
 			cur.execute ( self.query, self.values )
 			result = ( cur.fetchall(), cur.description, cur.lastrowid )
@@ -112,7 +119,7 @@ class Sqlite3WorkerExecuteScript ( Sqlite3WorkerRequest ):
 	
 	def execute ( self ):
 		LOGGER.debug ( "run executescript: %s", self.query )
-		cur = self._sqlite3_cursor
+		cur = self.thread._sqlite3_cursor
 		try:
 			cur.executescript ( self.query )
 			result = ( cur.fetchall(), cur.description, cur.lastrowid )
@@ -132,8 +139,7 @@ class Sqlite3WorkerCommit ( Sqlite3WorkerRequest ):
 	
 	def execute ( self ):
 		LOGGER.debug("run commit")
-		thread = self.thread
-		thread._sqlite3_conn.commit()
+		self.thread._sqlite3_conn.commit()
 
 class Sqlite3WorkerExit ( Exception, Sqlite3WorkerRequest ):
 	def execute ( self ):
@@ -236,8 +242,7 @@ class Sqlite3Worker ( Frozen_object ):
 	
 	def close ( self ):
 		"""If we're the last worker, close down the thread which closes the sqlite3 database file."""
-		if self._exit_set: # pragma: no cover
-			LOGGER.debug ( "sqlite worker already closed" )
+		if self._exit_set:
 			raise ProgrammingError ( 'sqlite worker already closed' )
 		self._exit_set = True
 		with self._threads_lock:
@@ -252,7 +257,7 @@ class Sqlite3Worker ( Frozen_object ):
 					assert self._file_name == ':memory:'
 	
 	@property
-	def queue_size ( self ): # pragma: no cover
+	def queue_size ( self ):
 		"""Return the queue size."""
 		return self._thread._sql_queue.qsize()
 	
@@ -273,7 +278,7 @@ class Sqlite3Worker ( Frozen_object ):
 				description is the results of cursor.description after executing the query
 				lastrowid is the result of calling cursor.lastrowid after executing the query
 		"""
-		if self._exit_set: # pragma: no cover
+		if self._exit_set:
 			LOGGER.debug ( "Exit set, not running: %s", query )
 			raise ProgrammingError ( 'sqlite worker already closed' )
 		LOGGER.debug ( "request execute: %s", query )
@@ -289,7 +294,7 @@ class Sqlite3Worker ( Frozen_object ):
 		return self.execute_ex ( query, values )[0]
 	
 	def executescript_ex ( self, query ):
-		if self._exit_set: # pragma: no cover
+		if self._exit_set:
 			LOGGER.debug ( "Exit set, not running: %s", query )
 			raise ProgrammingError ( 'sqlite worker already closed' )
 		LOGGER.debug ( "request executescript: %s", query )
@@ -305,15 +310,15 @@ class Sqlite3Worker ( Frozen_object ):
 		return self.executescript_ex ( sql )[0]
 	
 	def commit ( self ):
-		if self._exit_set: # pragma: no cover
-			LOGGER.debug ( "Exit set, not running: %s", query )
+		if self._exit_set:
+			LOGGER.debug ( "Exit set, not commiting" )
 			raise ProgrammingError ( 'sqlite worker already closed' )
 		LOGGER.debug ( "request commit" )
 		self._thread._sql_queue.put ( Sqlite3WorkerCommit ( self._thread ), timeout=5 )
 	
 	@property
 	def total_changes ( self ):
-		if self._exit_set: # pragma: no cover
+		if self._exit_set:
 			LOGGER.debug ( "Exit set, not querying total_changes" )
 			raise ProgrammingError ( 'sqlite worker already closed' )
 		return self._thread._sqlite3_conn.total_changes
@@ -338,7 +343,7 @@ class Sqlite3worker_dbapi_cursor ( Frozen_object ):
 	
 	def fetchone ( self ):
 		try:
-			return self.rows.pop ( 0 )
+			return self.con.row_factory ( self, self.rows.pop ( 0 ) )
 		except IndexError:
 			return None
 	
@@ -372,16 +377,12 @@ class Sqlite3worker_dbapi_connection ( Frozen_object ):
 		self.worker.close()
 		self.worker = None
 	
-	@property
-	def row_factory ( self ):
-		raise NotImplementedError ( type ( self ).__name__ + '.row_factory' )
-	
-	@row_factory.setter
-	def row_factory ( self, row_factory ):
-		self.worker.set_row_factory ( row_factory )
+	@staticmethod
+	def row_factory ( cursor, row ):
+		return row
 	
 	@property
-	def text_factory ( self ):
+	def text_factory ( self ): # pragma: no cover
 		raise NotImplementedError ( type ( self ).__name__ + '.text_factory' )
 	
 	@text_factory.setter

@@ -46,7 +46,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
             suffix="pytest", prefix="sqlite")
         self.sqlite3worker = sqlite3worker.Sqlite3Worker(self.tmp_file)
         # Create sql db.
-        self.sqlite3worker.execute(
+        self.sqlite3worker.executescript( # using executescript here for code coverage reasons
             "CREATE TABLE tester (timestamp DATETIME, uuid TEXT)")
 
     def tearDown(self):  # pylint:disable=D0102
@@ -68,7 +68,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         with self.assertRaises ( sqlite3worker.OperationalError ):
             self.sqlite3worker.execute(query)
         # Give it one second to clear the queue.
-        if self.sqlite3worker.queue_size != 0:
+        if self.sqlite3worker.queue_size != 0: # pragma: no cover - this never happens any more
             time.sleep(1)
         self.assertEqual(self.sqlite3worker.queue_size, 0)
         self.assertEqual(
@@ -84,7 +84,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         self.sqlite3worker.execute(
             "INSERT into tester values (?, ?)", ("2011-02-02 14:14:14", "dog"))
         # Give it one second to clear the queue.
-        if self.sqlite3worker.queue_size != 0:
+        if self.sqlite3worker.queue_size != 0: # pragma: no cover - this never happens any more
             time.sleep(1)
         self.assertEqual(
             self.sqlite3worker.execute("SELECT * from tester"),
@@ -128,7 +128,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
                         ("2010-01-01 13:00:00", token))
                     resp = self.sqlite_obj.execute(
                         "SELECT * from tester where uuid = ?", (token,))
-                    if resp != [("2010-01-01 13:00:00", token)]:
+                    if resp != [("2010-01-01 13:00:00", token)]: # pragma: no cover ( we don't expect tests to fail )
                         self.failed = True
                         break
                 self.completed = True
@@ -173,7 +173,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
                     resp = c.fetchone()
                     logging.debug ( 'cursor #{} closing'.format ( i ) )
                     c.close()
-                    if resp != ( "2010-01-01 13:00:00", token ):
+                    if resp != ( "2010-01-01 13:00:00", token ): # pragma: no cover ( we don't expect tests to fail )
                         logging.debug ( 'cursor #{} invalid resp {!r}'.format ( i, resp ) )
                         logging.debug ( repr ( resp ) )
                         self.failed = True
@@ -188,13 +188,53 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         for id in range ( 5 ):
             threads.append ( threaded ( id, self.tmp_file ) )
         
+        con = sqlite3worker.connect ( self.tmp_file )
+        con.executescript ( 'pragma foreign_keys=on;' ) # not using this, put here for code coverage reasons
+        con.row_factory = sqlite3worker.Row
+        con.text_factory = unicode
+        
         for i in range ( 5 ):
             while not threads[i].completed:
                 time.sleep ( 0.1 )
             self.assertEqual ( threads[i].failed, False )
             threads[i].join()
-
-if __name__ == "__main__":
+        
+        logging.debug ( 'counting results' ) # yes I could do a count(*) here but I'm doing it this way for code coverage reasons
+        con.commit()
+        cur = con.execute ( 'select * from tester' )
+        count = 0
+        for row in cur:
+            self.assertEqual ( len ( row['uuid'] ), 36 )
+            count += 1
+        self.assertEquals ( cur.fetchone(), None ) # make sure all rows retrieved
+        con.close()
+        self.assertEquals ( count, 25 )
+    
+    def test_coverage ( self ):
+        """ a bunch of miscellaneous things to get code coverage to 100% """
+        class Foo ( sqlite3worker.Frozen_object ):
+            pass
+        foo = Foo()
+        with self.assertRaises ( AttributeError ):
+            foo.bar = 'bar'
+        self.sqlite3worker.set_row_factory ( sqlite3worker.Row )
+        self.assertEquals ( self.sqlite3worker.total_changes, 0 )
+        self.sqlite3worker.set_text_factory ( unicode )
+        with self.assertRaises ( sqlite3worker.OperationalError ):
+            self.sqlite3worker.executescript ( 'THIS IS INTENTIONALLY BAD SQL' )
+        
+        # try to force and catch an assert in the close logic...
+        del self.sqlite3worker._threads[self.sqlite3worker._file_name]
+        with self.assertRaises ( AssertionError ):
+            self.sqlite3worker.close()
+        
+        self.assertEquals ( sqlite3worker.normalize_file_name ( ':MEMORY:' ), ':memory:' )
+        with self.assertRaises ( sqlite3worker.ProgrammingError ):
+            self.sqlite3worker.executescript ( 'drop table tester' )
+        with self.assertRaises ( sqlite3worker.ProgrammingError ):
+            self.sqlite3worker.commit()
+        
+if __name__ == "__main__": # pragma: no cover ( only executed when running test directly )
     if False:
         import sys
         logging.basicConfig ( stream=sys.stdout, level=logging.DEBUG, format='%(asctime)s [%(threadName)s %(levelname)s] %(message)s' )
