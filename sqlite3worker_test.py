@@ -28,6 +28,7 @@ __license__ = "MIT"
 
 import logging
 import os
+import sys
 import tempfile
 import threading
 import time
@@ -37,6 +38,8 @@ import unittest
 
 import sqlite3worker
 
+if sys.version_info[0] >= 3:
+	unicode = str
 
 class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
     """Test out the sqlite3worker library."""
@@ -206,9 +209,9 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         for row in cur:
             self.assertEqual ( len ( row['uuid'] ), 36 )
             count += 1
-        self.assertEquals ( cur.fetchone(), None ) # make sure all rows retrieved
+        self.assertEqual ( cur.fetchone(), None ) # make sure all rows retrieved
         con.close()
-        self.assertEquals ( count, 25 )
+        self.assertEqual ( count, 25 )
     
     def test_coverage ( self ):
         """ a bunch of miscellaneous things to get code coverage to 100% """
@@ -218,7 +221,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         with self.assertRaises ( AttributeError ):
             foo.bar = 'bar'
         self.sqlite3worker.set_row_factory ( sqlite3worker.Row )
-        self.assertEquals ( self.sqlite3worker.total_changes, 0 )
+        self.assertEqual ( self.sqlite3worker.total_changes, 0 )
         self.sqlite3worker.set_text_factory ( unicode )
         with self.assertRaises ( sqlite3worker.OperationalError ):
             self.sqlite3worker.executescript ( 'THIS IS INTENTIONALLY BAD SQL' )
@@ -228,7 +231,7 @@ class Sqlite3WorkerTests(unittest.TestCase):  # pylint:disable=R0904
         with self.assertRaises ( AssertionError ):
             self.sqlite3worker.close()
         
-        self.assertEquals ( sqlite3worker.normalize_file_name ( ':MEMORY:' ), ':memory:' )
+        self.assertEqual ( sqlite3worker.normalize_file_name ( ':MEMORY:' ), ':memory:' )
         with self.assertRaises ( sqlite3worker.ProgrammingError ):
             self.sqlite3worker.executescript ( 'drop table tester' )
         with self.assertRaises ( sqlite3worker.ProgrammingError ):
